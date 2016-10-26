@@ -17,14 +17,14 @@ def debugCallback(*args):
     print (ffi.string(args[6]))
     return True
 
-def CreateDebugReportCallbackEXT(instance, pCreateInfo, pAllocator):
+def createDebugReportCallbackEXT(instance, pCreateInfo, pAllocator):
     func = vkGetInstanceProcAddr(instance, 'vkCreateDebugReportCallbackEXT')
     if func:
         return func(instance, pCreateInfo, pAllocator)
     else:
         return VK_ERROR_EXTENSION_NOT_PRESENT
 
-def DestroyDebugReportCallbackEXT(instance, callback, pAllocator):
+def destroyDebugReportCallbackEXT(instance, callback, pAllocator):
     func = vkGetInstanceProcAddr(instance, 'vkDestroyDebugReportCallbackEXT')
     if func:
         func(instance, callback, pAllocator)
@@ -80,14 +80,15 @@ class HelloTriangleApplication(object):
         self.__pipelineLayout = None
 
     def __del__(self):
-        if self.__pipelineLayout:
-            vkDestroyPipelineLayout(self.__device, self.__pipelineLayout, ffi.NULL)
-
         if self.__renderPass:
             vkDestroyRenderPass(self.__device, self.__renderPass, None)
 
-        for i in self.__swapChainImageViews:
-            vkDestroyImageView(self.__device, i, None)
+        if self.__pipelineLayout:
+            vkDestroyPipelineLayout(self.__device, self.__pipelineLayout, ffi.NULL)
+
+        if self.__swapChainImageViews:
+            for i in self.__swapChainImageViews:
+                vkDestroyImageView(self.__device, i, None)
 
         if self.__swapChain:
             destroySwapChain(self.__device, self.__swapChain, None)
@@ -95,11 +96,14 @@ class HelloTriangleApplication(object):
         if self.__device:
             vkDestroyDevice(self.__device, None)
 
-        destroySurface(self.__instance, self.__surface, None)
+        if self.__surface:
+            destroySurface(self.__instance, self.__surface, None)
 
-        DestroyDebugReportCallbackEXT(self.__instance, self.__callback, None)
+        if self.__callback:
+            destroyDebugReportCallbackEXT(self.__instance, self.__callback, None)
 
-        vkDestroyInstance(self.__instance, None)
+        if self.__instance:
+            vkDestroyInstance(self.__instance, None)
 
     def __initWindow(self):
         glfw.init()
@@ -162,9 +166,7 @@ class HelloTriangleApplication(object):
             flags=VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT,
             pfnCallback=debugCallback
         )
-        # CreateDebugReportCallback = vkGetInstanceProcAddr(self.__instance, 'vkCreateDebugReportCallbackEXT')
-        # self.__callback = CreateDebugReportCallback(self.__instance, createInfo, None)
-        self.__callback = CreateDebugReportCallbackEXT(self.__instance, createInfo, None)
+        self.__callback = createDebugReportCallbackEXT(self.__instance, createInfo, None)
         if not self.__callback:
             raise Exception("failed to set up debug callback!")
 
@@ -197,9 +199,7 @@ class HelloTriangleApplication(object):
             )
             queueCreateInfos.append(queueCreateInfo)
 
-        f = [0 for i in range(55)]
         deviceFeatures = VkPhysicalDeviceFeatures()
-        # deviceFeatures = VkPhysicalDeviceFeatures(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0)
         deArray = [ffi.new('char[]', i) for i in deviceExtensions]
         deviceExtensions_c = ffi.new('char*[]', deArray)
         createInfo = VkDeviceCreateInfo(
