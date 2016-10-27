@@ -155,6 +155,9 @@ class HelloTriangleApplication(object):
         self.__uniformBuffer = None
         self.__uniformBufferMemory = None
 
+        self.__descriptorPool = None
+        self.__descriptorSet = None
+
         self.__commandBuffers = None
 
         self.__imageAvailableSemaphore = None
@@ -195,6 +198,9 @@ class HelloTriangleApplication(object):
 
         if self.__commandPool:
             vkDestroyCommandPool(self.__device, self.__commandPool, None)
+
+        if self.__descriptorPool:
+            vkDestroyDescriptorPool(self.__device, self.__descriptorPool, None)
 
         if self.__swapChainFramebuffers:
             for i in self.__swapChainFramebuffers:
@@ -258,6 +264,8 @@ class HelloTriangleApplication(object):
         self.__createVertexBuffer()
         self.__createIndexBuffer()
         self.__createUniformBuffer()
+        self.__createDescriptorPool()
+        self.__createDescriptorSet()
         self.__createCommandBuffers()
         self.__createSemaphores()
 
@@ -545,7 +553,7 @@ class HelloTriangleApplication(object):
             polygonMode=VK_POLYGON_MODE_FILL,
             lineWidth=1.0,
             cullMode=VK_CULL_MODE_BACK_BIT,
-            frontFace=VK_FRONT_FACE_CLOCKWISE,
+            frontFace=VK_FRONT_FACE_COUNTER_CLOCKWISE,
             depthBiasEnable=False
         )
 
@@ -668,6 +676,50 @@ class HelloTriangleApplication(object):
         self.__uniformBuffer, self.__uniformBufferMemory = self.__createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                                                                                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
 
+    def __createDescriptorPool(self):
+        poolSize = VkDescriptorPoolSize(
+            type=VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            descriptorCount=1
+        )
+
+        poolInfo = VkDescriptorPoolCreateInfo(
+            poolSizeCount=1,
+            pPoolSizes=poolSize,
+            maxSets=1
+        )
+
+        self.__descriptorPool = vkCreateDescriptorPool(self.__device, poolInfo, None)
+
+    def __createDescriptorSet(self):
+        layouts = [self.__descriptorSetLayout]
+        # layouts = ffi.new('VkDescriptorSetLayout[]', [self.__descriptorSetLayout])
+        allocInfo = VkDescriptorSetAllocateInfo(
+            descriptorPool=self.__descriptorPool,
+            descriptorSetCount=1,
+            pSetLayouts=layouts
+        )
+
+        descriptorSets = vkAllocateDescriptorSets(self.__device, allocInfo)
+        self.__descriptorSet = descriptorSets[0]
+
+        ubo = UniformBufferObject(np.identity(4, np.float32), np.identity(4, np.float32), np.identity(4, np.float32))
+        bufferInfo = VkDescriptorBufferInfo(
+            buffer=self.__uniformBuffer,
+            offset=0,
+            range=ubo.nbytes
+        )
+
+        descriptorWrite = VkWriteDescriptorSet(
+            dstSet=self.__descriptorSet,
+            dstBinding=0,
+            dstArrayElement=0,
+            descriptorType=VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            descriptorCount=1,
+            pBufferInfo=bufferInfo
+        )
+
+        vkUpdateDescriptorSets(self.__device, 1, [descriptorWrite], 0, ffi.NULL)
+
     def __createBuffer(self, size, usage, properties):
         buf = None
         bufMemory = None
@@ -769,6 +821,9 @@ class HelloTriangleApplication(object):
             vkCmdBindVertexBuffers(cmdBuffer, 0, 1, vertexBuffers, offsets)
 
             vkCmdBindIndexBuffer(cmdBuffer, self.__indexBuffer, 0, VK_INDEX_TYPE_UINT16)
+
+            vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, self.__pipelineLayout,
+                                    0, 1, [self.__descriptorSet], 0, ffi.NULL)
 
             vkCmdDrawIndexed(cmdBuffer, len(self.indices), 1, 0, 0, 0)
 
