@@ -582,7 +582,7 @@ class HelloTriangleApplication(object):
         self.__descriptorSetLayout = vkCreateDescriptorSetLayout(self.__device, layoutInfo, None)
 
     def __createGraphicsPipeline(self):
-        vertShaderModule = self.__createShaderModule('shaders/vert4.spv')
+        vertShaderModule = self.__createShaderModule('shaders/vert5.spv')
         fragShaderModule = self.__createShaderModule('shaders/frag4.spv')
 
         vertShaderStageInfo = VkPipelineShaderStageCreateInfo(
