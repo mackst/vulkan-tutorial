@@ -670,15 +670,15 @@ class HelloTriangleApplication(object):
                                      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
 
         vkFreeMemory(self.__device, stagingImageMemory, None)
-        vkDestroyBuffer(self.__device, stagingImage, None)
+        vkDestroyImage(self.__device, stagingImage, None)
 
-    def __createImage(self, width, height, format, tiling, usage, properties):
+    def __createImage(self, width, height, im_format, tiling, usage, properties):
         imageInfo = VkImageCreateInfo(
             imageType=VK_IMAGE_TYPE_2D,
             extent=VkExtent3D(width, height, 1),
             mipLevels=1,
             arrayLayers=1,
-            format=format,
+            format=im_format,
             tiling=tiling,
             initialLayout=VK_IMAGE_LAYOUT_PREINITIALIZED,
             usage=usage,
@@ -696,19 +696,18 @@ class HelloTriangleApplication(object):
         )
         imageMemory = vkAllocateMemory(self.__device, allocInfo, None)
         vkBindImageMemory(self.__device, image, imageMemory, 0)
-
         return (image, imageMemory)
 
-    def __transitionImageLayout(self, image, format, oldLayout, newLayout):
+    def __transitionImageLayout(self, image, im_format, oldLayout, newLayout):
         commandBuffer = self.__beginSingleTimeCommands()
 
+        familyIndiex = ffi.cast('uint32_t', VK_QUEUE_FAMILY_IGNORED)
         barrier = VkImageMemoryBarrier(
             oldLayout=oldLayout,
             newLayout=newLayout,
-            # srcQueueFamilyIndex=ffi.new('uint32_t', VK_QUEUE_FAMILY_IGNORED),
-            # dstQueueFamilyIndex=ffi.new('uint32_t', VK_QUEUE_FAMILY_IGNORED),
+            srcQueueFamilyIndex=familyIndiex,
+            dstQueueFamilyIndex=familyIndiex,
             image=image,
-            # subresourceRange=subresourceRange
             subresourceRange=[VK_IMAGE_ASPECT_COLOR_BIT,
                               0, 1, 0, 1]
         )
