@@ -1,16 +1,17 @@
-from pyVulkan import *
+from vulkan import *
 
-import PyGlfwCffi as glfw
+from PyQt5 import QtGui
 
 
 WIDTH = 800
 HEIGHT = 600
 
 
-class HelloTriangleApplication(object):
+class HelloTriangleApplication(QtGui.QWindow):
 
     def __init__(self):
-        self.__window = None
+        super(HelloTriangleApplication, self).__init__(None)
+
         self.__instance = None
 
     def __del__(self):
@@ -19,22 +20,19 @@ class HelloTriangleApplication(object):
             vkDestroyInstance(self.__instance, None)
 
     def __initWindow(self):
-        glfw.init()
-
-        glfw.window_hint(glfw.CLIENT_API, glfw.NO_API)
-        glfw.window_hint(glfw.RESIZABLE, False)
-
-        self.__window = glfw.create_window(WIDTH, HEIGHT, "Vulkan")
+        self.setSurfaceType(self.OpenGLSurface)
+        self.setTitle("Vulkan")
+        self.resize(WIDTH, HEIGHT)
 
     def __initVulkan(self):
         self.__createInstance()
 
     def __mainLoop(self):
-        while not glfw.window_should_close(self.__window):
-            glfw.poll_events()
+        pass
 
     def __createInstance(self):
         appInfo = VkApplicationInfo(
+            sType=VK_STRUCTURE_TYPE_APPLICATION_INFO,
             pApplicationName='Hello Triangle',
             applicationVersion=VK_MAKE_VERSION(1, 0, 0),
             pEngineName='No Engine',
@@ -42,30 +40,38 @@ class HelloTriangleApplication(object):
             apiVersion=VK_API_VERSION
         )
 
-        createInfo = VkInstanceCreateInfo(pApplicationInfo=appInfo)
-        glfwExtensions, glfwExtensionCount = glfw.getRequiredInstanceExtensions()
-
-        # for i in range(glfwExtensionCount[0]): print ffi.string(glfwExtensions[i])
-
-        createInfo.enabledExtensionCount = glfwExtensionCount[0]
-        createInfo.ppEnabledExtensionNames = glfwExtensions
-
-        createInfo.enabledLayerCount = 0
+        extensions = [i.extensionName for i in vkEnumerateInstanceExtensionProperties(None)]
+        createInfo = VkInstanceCreateInfo(
+            sType=VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+            pApplicationInfo=appInfo,
+            enabledLayerCount=0,
+            enabledExtensionCount=len(extensions),
+            ppEnabledExtensionNames=extensions
+        )
 
         self.__instance = vkCreateInstance(createInfo, None)
 
-    def run(self):
+    def show(self):
         self.__initWindow()
         self.__initVulkan()
         self.__mainLoop()
 
+        super(HelloTriangleApplication, self).show()
+
 
 if __name__ == '__main__':
+    import sys
 
-    app = HelloTriangleApplication()
+    app = QtGui.QGuiApplication(sys.argv)
 
-    app.run()
+    win = HelloTriangleApplication()
+    win.show()
 
-    del app
-    glfw.terminate()
+    def clenaup():
+        global win
+        del win
+
+    app.aboutToQuit.connect(clenaup)
+
+    sys.exit(app.exec_())
 

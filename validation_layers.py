@@ -1,6 +1,6 @@
-from pyVulkan import *
+from vulkan import *
 
-import PyGlfwCffi as glfw
+from PyQt5 import QtGui
 
 
 WIDTH = 800
@@ -11,10 +11,9 @@ validationLayers = ["VK_LAYER_LUNARG_standard_validation"]
 enableValidationLayers = True
 
 
-@vkDebugReportCallbackEXT
 def debugCallback(*args):
-    print (ffi.string(args[6]))
-    return True
+    print('DEBUG: {} {}'.format(args[5], args[6]))
+    return 0
 
 def createDebugReportCallbackEXT(instance, pCreateInfo, pAllocator):
     func = vkGetInstanceProcAddr(instance, 'vkCreateDebugReportCallbackEXT')
@@ -29,10 +28,11 @@ def destroyDebugReportCallbackEXT(instance, callback, pAllocator):
         func(instance, callback, pAllocator)
 
 
-class HelloTriangleApplication(object):
+class HelloTriangleApplication(QtGui.QWindow):
 
     def __init__(self):
-        self.__window = None
+        super(HelloTriangleApplication, self).__init__(None)
+
         self.__instance = None
         self.__callback = None
 
@@ -44,26 +44,23 @@ class HelloTriangleApplication(object):
             vkDestroyInstance(self.__instance, None)
 
     def __initWindow(self):
-        glfw.init()
-
-        glfw.window_hint(glfw.CLIENT_API, glfw.NO_API)
-        glfw.window_hint(glfw.RESIZABLE, False)
-
-        self.__window = glfw.create_window(WIDTH, HEIGHT, "Vulkan")
+        self.setSurfaceType(self.OpenGLSurface)
+        self.setTitle("Vulkan")
+        self.resize(WIDTH, HEIGHT)
 
     def __initVulkan(self):
         self.__createInstance()
         self.__setupDebugCallback()
 
     def __mainLoop(self):
-        while not glfw.window_should_close(self.__window):
-            glfw.poll_events()
+        pass
 
     def __createInstance(self):
         if enableValidationLayers and not self.__checkValidationLayerSupport():
             raise Exception("validation layers requested, but not available!")
 
         appInfo = VkApplicationInfo(
+            sType=VK_STRUCTURE_TYPE_APPLICATION_INFO,
             pApplicationName='Hello Triangle',
             applicationVersion=VK_MAKE_VERSION(1, 0, 0),
             pEngineName='No Engine',
@@ -71,21 +68,25 @@ class HelloTriangleApplication(object):
             apiVersion=VK_API_VERSION
         )
 
-        createInfo = VkInstanceCreateInfo(pApplicationInfo=appInfo)
         extensions = self.__getRequiredExtensions()
-        ext = [ffi.new('char[]', i) for i in extensions]
-        extArray = ffi.new('char*[]', ext)
-
-        createInfo.enabledExtensionCount = len(extensions)
-        createInfo.ppEnabledExtensionNames = extArray
 
         if enableValidationLayers:
-            createInfo.enabledLayerCount = len(validationLayers)
-            layers = [ffi.new('char[]', i) for i in validationLayers]
-            vlayers = ffi.new('char*[]', layers)
-            createInfo.ppEnabledLayerNames = vlayers
+            createInfo = VkInstanceCreateInfo(
+                sType=VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+                pApplicationInfo=appInfo,
+                enabledLayerCount=len(validationLayers),
+                ppEnabledLayerNames=validationLayers,
+                enabledExtensionCount=len(extensions),
+                ppEnabledExtensionNames=extensions
+            )
         else:
-            createInfo.enabledLayerCount = 0
+            createInfo = VkInstanceCreateInfo(
+                sType=VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+                pApplicationInfo=appInfo,
+                enabledLayerCount=0,
+                enabledExtensionCount=len(extensions),
+                ppEnabledExtensionNames=extensions
+            )
 
         self.__instance = vkCreateInstance(createInfo, None)
 
@@ -94,6 +95,7 @@ class HelloTriangleApplication(object):
             return
 
         createInfo = VkDebugReportCallbackCreateInfoEXT(
+            sType=VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT,
             flags=VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT,
             pfnCallback=debugCallback
         )
@@ -104,11 +106,7 @@ class HelloTriangleApplication(object):
 
 
     def __getRequiredExtensions(self):
-        extensions = []
-
-        glfwExtensions, glfwExtensionCount = glfw.getRequiredInstanceExtensions()
-        for i in range(glfwExtensionCount[0]):
-            extensions.append(ffi.string(glfwExtensions[i]))
+        extensions = [i.extensionName for i in vkEnumerateInstanceExtensionProperties(None)]
 
         if enableValidationLayers:
             extensions.append(VK_EXT_DEBUG_REPORT_EXTENSION_NAME)
@@ -121,7 +119,7 @@ class HelloTriangleApplication(object):
             layerFound = False
 
             for layerProperties in availableLayers:
-                if layerName == ffi.string(layerProperties.layerName):
+                if layerName == layerProperties.layerName:
                     layerFound = True
                     break
             if not layerFound:
@@ -129,18 +127,27 @@ class HelloTriangleApplication(object):
 
         return True
 
-    def run(self):
+    def show(self):
         self.__initWindow()
         self.__initVulkan()
         self.__mainLoop()
 
+        super(HelloTriangleApplication, self).show()
+
 
 if __name__ == '__main__':
+    import sys
 
-    app = HelloTriangleApplication()
+    app = QtGui.QGuiApplication(sys.argv)
 
-    app.run()
+    win = HelloTriangleApplication()
+    win.show()
 
-    del app
-    glfw.terminate()
+    def clenaup():
+        global win
+        del win
+
+    app.aboutToQuit.connect(clenaup)
+
+    sys.exit(app.exec_())
 
