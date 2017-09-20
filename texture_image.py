@@ -203,6 +203,12 @@ class HelloTriangleApplication(QtGui.QWindow):
         if self.__textureImage:
             vkDestroyImage(self.__device, self.__textureImage, None)
 
+        if self.__uniformBufferMemory:
+            vkFreeMemory(self.__device, self.__uniformBufferMemory, None)
+
+        if self.__uniformBuffer:
+            vkDestroyBuffer(self.__device, self.__uniformBuffer, None)
+
         if self.__indexBufferMemory:
             vkFreeMemory(self.__device, self.__indexBufferMemory, None)
 
@@ -384,6 +390,7 @@ class HelloTriangleApplication(QtGui.QWindow):
         queueCreateInfos = []
         for queueFamily in uniqueQueueFamilies:
             queueCreateInfo = VkDeviceQueueCreateInfo(
+                sType=VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
                 queueFamilyIndex=queueFamily,
                 queueCount=1,
                 pQueuePriorities=[1.0]
@@ -683,7 +690,7 @@ class HelloTriangleApplication(QtGui.QWindow):
         im.putalpha(1)
         imageSize = im.width * im.height * 4
 
-        stagingBuffer, stagingBufferMemory = self.__createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        stagingBuffer, stagingBufferMemory = self.__createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                                                                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)
 
         data = vkMapMemory(self.__device, stagingBufferMemory, 0, imageSize, 0)
@@ -739,6 +746,7 @@ class HelloTriangleApplication(QtGui.QWindow):
 
         familyIndiex = ffi.cast('uint32_t', VK_QUEUE_FAMILY_IGNORED)
         barrier = VkImageMemoryBarrier(
+            sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
             oldLayout=oldLayout,
             newLayout=newLayout,
             srcQueueFamilyIndex=familyIndiex,

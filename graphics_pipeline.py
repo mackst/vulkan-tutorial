@@ -216,6 +216,7 @@ class HelloTriangleApplication(QtGui.QWindow):
         queueCreateInfos = []
         for queueFamily in uniqueQueueFamilies:
             queueCreateInfo = VkDeviceQueueCreateInfo(
+                sType=VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
                 queueFamilyIndex=queueFamily,
                 queueCount=1,
                 pQueuePriorities=[1.0]
