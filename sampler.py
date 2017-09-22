@@ -156,8 +156,6 @@ class HelloTriangleApplication(QtGui.QWindow):
         self.__indexBuffer = None
         self.__indexBufferMemory = None
 
-        self.__uniformStagingBuffer = None
-        self.__uniformStagingBufferMemory = None
         self.__uniformBuffer = None
         self.__uniformBufferMemory = None
 
@@ -988,9 +986,6 @@ class HelloTriangleApplication(QtGui.QWindow):
         vkFreeCommandBuffers(self.__device, self.__commandPool, 1, commandBuffers)
 
     def __copyBuffer(self, srcBuffer, dstBuffer, size):
-        if srcBuffer is None or dstBuffer is None:
-            return
-
         commandBuffer = self.__beginSingleTimeCommands()
 
         copyRegion = VkBufferCopy(size=size)
@@ -1073,8 +1068,6 @@ class HelloTriangleApplication(QtGui.QWindow):
         data = vkMapMemory(self.__device, self.__uniformBufferMemory, 0, ubo.nbytes, 0)
         ffi.memmove(data, ubo.to_c_ptr, ubo.nbytes)
         vkUnmapMemory(self.__device, self.__uniformBufferMemory)
-
-        self.__copyBuffer(self.__uniformStagingBuffer, self.__uniformBuffer, ubo.nbytes)
 
     def __drawFrame(self):
         vkAcquireNextImageKHR = vkGetDeviceProcAddr(self.__device, 'vkAcquireNextImageKHR')
