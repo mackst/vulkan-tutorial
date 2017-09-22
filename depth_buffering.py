@@ -1220,15 +1220,17 @@ class HelloTriangleApplication(QtGui.QWindow):
             self.recreateSwapChain()
             return
 
+        waitSemaphore = [self.__imageAvailableSemaphore]
+        signalSemaphore = [self.__renderFinishedSemaphore]
         submitInfo = VkSubmitInfo(
             sType=VK_STRUCTURE_TYPE_SUBMIT_INFO,
-            waitSemaphoreCount=1,
-            pWaitSemaphores=[self.__imageAvailableSemaphore],
+            waitSemaphoreCount=len(waitSemaphore),
+            pWaitSemaphores=waitSemaphore,
             pWaitDstStageMask=[VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, ],
             commandBufferCount=1,
             pCommandBuffers=[self.__commandBuffers[imageIndex], ],
-            signalSemaphoreCount=1,
-            pSignalSemaphores=[self.__renderFinishedSemaphore, ]
+            signalSemaphoreCount=len(signalSemaphore),
+            pSignalSemaphores=signalSemaphore
         )
 
         vkQueueSubmit(self.__graphicsQueue, 1, submitInfo, VK_NULL_HANDLE)
@@ -1236,8 +1238,8 @@ class HelloTriangleApplication(QtGui.QWindow):
         swapChains = [self.__swapChain]
         presentInfo = VkPresentInfoKHR(
             sType=VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-            waitSemaphoreCount=1,
-            pWaitSemaphores=[self.__imageAvailableSemaphore],
+            waitSemaphoreCount=len(signalSemaphore),
+            pWaitSemaphores=signalSemaphore,
             swapchainCount=1,
             pSwapchains=swapChains,
             pImageIndices=[imageIndex]
