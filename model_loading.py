@@ -956,7 +956,7 @@ class HelloTriangleApplication(QtGui.QWindow):
         vertexData = []
         indexData = []
         for shape in shapes:
-            allIndices = np.array(shapes[shape]['indices'])
+            allIndices = shapes[shape]['indices']
             for idx in range(0, len(allIndices), 3):
                 vid = allIndices[idx]
                 tid = allIndices[idx+2]
@@ -972,7 +972,7 @@ class HelloTriangleApplication(QtGui.QWindow):
                     1.0 - texcoords[2 * tid + 1]
                 )
 
-                if not data in uniqueVertices:
+                if data not in uniqueVertices:
                     uniqueVertices[data] = len(vertexData)
                     vertexData.append(data)
                 indexData.append(uniqueVertices[data])

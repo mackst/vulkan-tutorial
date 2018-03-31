@@ -41,6 +41,7 @@ class HelloTriangleApplication(QtGui.QWindow):
         )
 
         extensions = [i.extensionName for i in vkEnumerateInstanceExtensionProperties(None)]
+        print(extensions)
         createInfo = VkInstanceCreateInfo(
             sType=VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
             pApplicationInfo=appInfo,
