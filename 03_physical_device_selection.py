@@ -38,16 +38,6 @@ def debugCallback(*args):
     return 0
 
 
-class QueueFamilyIndices(object):
-
-    def __init__(self):
-        self.graphicsFamily = -1
-
-    @property
-    def isComplete(self):
-        return self.graphicsFamily >= 0
-
-
 class HelloTriangleApplication(QtGui.QWindow):
 
     def __init__(self):
@@ -62,7 +52,6 @@ class HelloTriangleApplication(QtGui.QWindow):
 
         self.__instance = None
         self.__callbcak = None
-        self.__physicalDevice = None
 
         self.initVulkan()
 
@@ -77,7 +66,6 @@ class HelloTriangleApplication(QtGui.QWindow):
     def initVulkan(self):
         self.__cretaeInstance()
         self.__setupDebugCallback()
-        self.__pickPhysicalDevice()
 
     def __cretaeInstance(self):
         appInfo = VkApplicationInfo(
@@ -118,35 +106,6 @@ class HelloTriangleApplication(QtGui.QWindow):
         )
 
         self.__callbcak = vkCreateDebugReportCallbackEXT(self.__instance, createInfo, None)
-
-    def __pickPhysicalDevice(self):
-        physicalDevices = vkEnumeratePhysicalDevices(self.__instance)
-
-        for device in physicalDevices:
-            if self.__isDeviceSuitable(device):
-                self.__physicalDevice = device
-                break
-
-        assert self.__physicalDevice != None
-
-    def __isDeviceSuitable(self, device):
-        indices = self.__findQueueFamilies(device)
-
-        return indices.isComplete
-
-    def __findQueueFamilies(self, device):
-        indices = QueueFamilyIndices()
-
-        familyProperties = vkGetPhysicalDeviceQueueFamilyProperties(device)
-        for i, prop in enumerate(familyProperties):
-            if prop.queueCount > 0 and prop.queueFlags & VK_QUEUE_GRAPHICS_BIT:
-                indices.graphicsFamily = i
-
-            if indices.isComplete:
-                break
-
-        return indices
-
 
 
 if __name__ == '__main__':
