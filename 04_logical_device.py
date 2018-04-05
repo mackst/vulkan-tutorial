@@ -63,10 +63,15 @@ class HelloTriangleApplication(QtGui.QWindow):
         self.__instance = None
         self.__callbcak = None
         self.__physicalDevice = None
+        self.__device = None
+        self.__graphicQueue = None
 
         self.initVulkan()
 
     def __del__(self):
+        if self.__device:
+            vkDestroyDevice(self.__device, None)
+
         if self.__callbcak:
             vkDestroyDebugReportCallbackEXT(self.__instance, self.__callbcak, None)
 
@@ -78,8 +83,12 @@ class HelloTriangleApplication(QtGui.QWindow):
         self.__cretaeInstance()
         self.__setupDebugCallback()
         self.__pickPhysicalDevice()
+        self.__createLogicalDevice()
 
     def __cretaeInstance(self):
+        if enableValidationLayers and not self.__checkValidationLayerSupport():
+            raise Exception("validation layers requested, but not available!")
+
         appInfo = VkApplicationInfo(
             # sType=VK_STRUCTURE_TYPE_APPLICATION_INFO,
             pApplicationName='Python VK',
@@ -89,7 +98,7 @@ class HelloTriangleApplication(QtGui.QWindow):
             apiVersion=VK_API_VERSION
         )
 
-        extenstions = [e.extensionName for e in vkEnumerateInstanceExtensionProperties(None)]
+        extenstions = self.__getRequiredExtensions()
         if enableValidationLayers:
             instanceInfo = VkInstanceCreateInfo(
                 pApplicationInfo=appInfo,
@@ -129,6 +138,35 @@ class HelloTriangleApplication(QtGui.QWindow):
 
         assert self.__physicalDevice != None
 
+    def __createLogicalDevice(self):
+        indices = self.__findQueueFamilies(self.__physicalDevice)
+        queueCreateInfo = VkDeviceQueueCreateInfo(
+            queueFamilyIndex=indices.graphicsFamily,
+            queueCount=1,
+            pQueuePriorities=[1.0]
+        )
+
+        deviceFeatures = VkPhysicalDeviceFeatures()
+        if enableValidationLayers:
+            createInfo = VkDeviceCreateInfo(
+                queueCreateInfoCount=1,
+                pQueueCreateInfos=queueCreateInfo,
+                enabledExtensionCount=0,
+                enabledLayerCount=len(validationLayers),
+                ppEnabledLayerNames=validationLayers,
+                pEnabledFeatures=deviceFeatures
+            )
+        else:
+            createInfo = VkDeviceCreateInfo(
+                queueCreateInfoCount=1,
+                pQueueCreateInfos=queueCreateInfo,
+                enabledExtensionCount=0,
+                enabledLayerCount=0,
+                pEnabledFeatures=deviceFeatures
+            )
+
+        self.__device = vkCreateDevice(self.__physicalDevice, createInfo, None)
+
     def __isDeviceSuitable(self, device):
         indices = self.__findQueueFamilies(device)
 
@@ -147,7 +185,27 @@ class HelloTriangleApplication(QtGui.QWindow):
 
         return indices
 
+    def __getRequiredExtensions(self):
+        extenstions = [e.extensionName for e in vkEnumerateInstanceExtensionProperties(None)]
 
+        if enableValidationLayers:
+            extenstions.append(VK_EXT_DEBUG_REPORT_EXTENSION_NAME)
+
+        return extenstions
+
+    def __checkValidationLayerSupport(self):
+        availableLayers = vkEnumerateInstanceLayerProperties()
+
+        for layer in validationLayers:
+            layerfound = False
+
+            for layerProp in availableLayers:
+                if layer == layerProp.layerName:
+                    layerfound = True
+                    break
+            return layerfound
+
+        return False
 
 if __name__ == '__main__':
     import sys
