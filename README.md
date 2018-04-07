@@ -1,7 +1,7 @@
 # vulkan-tutorial
 vulkan tutorial with python live steam
 
-[PySide 2](https://github.com/fredrikaverpil/pyside2-windows/releases)
+[PySide 2](http://wiki.qt.io/PySide2_GettingStarted)
 
 [Vulkan SDK](https://vulkan.lunarg.com/sdk/home)
 
