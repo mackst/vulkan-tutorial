@@ -90,3 +90,6 @@ ENV/
 
 # ide
 .idea/
+
+
+shader/
