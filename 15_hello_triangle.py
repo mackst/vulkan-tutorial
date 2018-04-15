@@ -181,6 +181,7 @@ class HelloTriangleApplication(QtGui.QWindow):
         self.timer.timeout.connect(self.drawFrame)
 
         self.initVulkan()
+        self.timer.start()
 
     def __del__(self):
         vkDeviceWaitIdle(self.__device)
@@ -224,6 +225,8 @@ class HelloTriangleApplication(QtGui.QWindow):
         if self.__instance:
             vkDestroyInstance(self.__instance, None)
             print('instance destroyed')
+
+        self.destroy()
 
     def initVulkan(self):
         self.__cretaeInstance()
@@ -611,6 +614,9 @@ class HelloTriangleApplication(QtGui.QWindow):
         self.__renderFinishedSemaphore = vkCreateSemaphore(self.__device, semaphoreInfo, None)
 
     def drawFrame(self):
+        if not self.isExposed():
+            return
+
         imageIndex = vkAcquireNextImageKHR(self.__device, self.__swapChain, 18446744073709551615,
                                            self.__imageAvailableSemaphore, VK_NULL_HANDLE)
 
@@ -729,10 +735,6 @@ class HelloTriangleApplication(QtGui.QWindow):
 
         return False
 
-    def show(self):
-        super(HelloTriangleApplication, self).show()
-        self.drawFrame()
-        # self.timer.start()
 
 if __name__ == '__main__':
     import sys
@@ -741,7 +743,6 @@ if __name__ == '__main__':
 
     win = HelloTriangleApplication()
     win.show()
-    # win.timer.start(500)
 
     def clenaup():
         global win
