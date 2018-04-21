@@ -229,8 +229,8 @@ class HelloTriangleApplication(QtGui.QWindow):
             -.5, .5, 1, 1, 1
         ])
 
-        # self.__indices = array.array('I', [0, 1, 2, 2, 3, 0])
-        self.__indices = ffi.new('uint16_t[]', [0, 1, 2, 2, 3, 0])
+        self.__indices = array.array('H', [0, 1, 2, 2, 3, 0])
+        # self.__indices = ffi.new('uint16_t[]', [0, 1, 2, 2, 3, 0])
         # self.__indices = numpy.array([0, 1, 2, 2, 3, 0], numpy.uint16)
 
         self.timer = QtCore.QTimer(self)
@@ -679,15 +679,16 @@ class HelloTriangleApplication(QtGui.QWindow):
         vkFreeMemory(self.__device, stagingMemory, None)
 
     def __createIndexBuffer(self):
-        # bufferSize = len(self.__indices) * self.__indices.itemsize
-        bufferSize = ffi.sizeof(self.__indices)
+        bufferSize = len(self.__indices) * self.__indices.itemsize
+        # bufferSize = ffi.sizeof(self.__indices)
 
         stagingBuffer, stagingMemory = self.__createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                                                            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)
         data = vkMapMemory(self.__device, stagingMemory, 0, bufferSize, 0)
-        #vertePtr = ffi.cast('uint16_t *', self.__indices.buffer_info()[0])
+        indicesPtr = ffi.cast('uint16_t *', self.__indices.buffer_info()[0])
         # vertePtr = ffi.cast('uint16_t*', self.__indices.ctypes.data)
-        ffi.memmove(data, ffi.addressof(self.__indices), bufferSize)
+        # ffi.memmove(data, ffi.addressof(self.__indices), bufferSize)
+        ffi.memmove(data, indicesPtr, bufferSize)
         vkUnmapMemory(self.__device, stagingMemory)
 
         self.__indexBuffer, self.__indexBufferMemory = self.__createBuffer(bufferSize,
