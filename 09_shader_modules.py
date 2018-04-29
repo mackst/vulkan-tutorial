@@ -449,7 +449,24 @@ class HelloTriangleApplication(QtGui.QWindow):
     def __isDeviceSuitable(self, device):
         indices = self.__findQueueFamilies(device)
 
-        return indices.isComplete
+        extensionsSupported = self.__checkDeviceExtensionSupport(device)
+
+        swapChainAdequate = False
+        if extensionsSupported:
+            swapChainSupport = self.__querySwapChainSupport(device)
+            swapChainAdequate = (swapChainSupport.formats is not None) and (swapChainSupport.presentModes is not None)
+
+        return indices.isComplete and extensionsSupported and swapChainAdequate
+
+    def __checkDeviceExtensionSupport(self, device):
+        availableExtensions = vkEnumerateDeviceExtensionProperties(device, None)
+
+        aen = [i.extensionName for i in availableExtensions]
+        for i in deviceExtensions:
+            if i not in aen:
+                return False
+
+        return True
 
     def __findQueueFamilies(self, device):
         indices = QueueFamilyIndices()
