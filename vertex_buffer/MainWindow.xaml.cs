@@ -606,7 +606,7 @@ namespace vertex_buffer
             var allocInfo = new MemoryAllocateInfo
             {
                 AllocationSize = memRequirements.Size,
-                MemoryTypeIndex = FindMemoryType(memRequirements.MemoryTypeBits, MemoryPropertyFlags.HostCached | MemoryPropertyFlags.HostCoherent)
+                MemoryTypeIndex = FindMemoryType(memRequirements.MemoryTypeBits, MemoryPropertyFlags.HostVisible | MemoryPropertyFlags.HostCoherent)
             };
 
             vertexBufferMemory = device.AllocateMemory(allocInfo);
