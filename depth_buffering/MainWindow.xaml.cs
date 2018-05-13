@@ -10,7 +10,7 @@ using System.Drawing;
 using Vulkan;
 using Vulkan.Windows;
 
-namespace sampler
+namespace depth_buffering
 {
     class QueueFamilyIndices
     {
@@ -42,8 +42,7 @@ namespace sampler
                 new VertexInputBindingDescription
                 {
                     Binding = 0,
-                    //Stride = (2 + 3) * sizeof(float),
-                    Stride = (uint)(Marshal.SizeOf<Vector2>() + Marshal.SizeOf<Vector3>()),
+                    Stride = (uint)(2 * Marshal.SizeOf<Vector3>() + Marshal.SizeOf<Vector2>()),
                     InputRate = VertexInputRate.Vertex
                 }
             };
@@ -57,7 +56,7 @@ namespace sampler
                 {
                     Binding = 0,
                     Location = 0,
-                    Format = Format.R32G32Sfloat,
+                    Format = Format.R32G32B32Sfloat,
                     Offset = 0
                 },
 
@@ -66,8 +65,15 @@ namespace sampler
                     Binding = 0,
                     Location = 1,
                     Format = Format.R32G32B32Sfloat,
-                    //Offset = 2 * sizeof(float)
-                    Offset = (uint)Marshal.SizeOf<Vector2>()
+                    Offset = (uint)Marshal.SizeOf<Vector3>()
+                },
+
+                new VertexInputAttributeDescription
+                {
+                    Binding = 0,
+                    Location = 2,
+                    Format = Format.R32G32Sfloat,
+                    Offset = (uint)(2 * Marshal.SizeOf<Vector3>())
                 }
             };
         }
@@ -127,6 +133,10 @@ namespace sampler
 
         private CommandPool commandPool;
 
+        private Vulkan.Image depthImage;
+        private DeviceMemory depthImageMemory;
+        private ImageView depthImageView;
+
         private Vulkan.Image textureImage;
         private DeviceMemory textureImageMemory;
         private ImageView textureImageView;
@@ -158,16 +168,22 @@ namespace sampler
         };
 
         private float[] vertices = new float[] {
-            // pos           color
-            -0.5f, -0.5f, 1.0f, 0.0f, 0.0f,
-            0.5f, -0.5f, 0.0f, 1.0f, 0.0f,
-            0.5f, 0.5f, 0.0f, 0.0f, 1.0f,
-            -0.5f, 0.5f, 1.0f, 1.0f, 1.0f
+            // pos               color            texcoord
+            -0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f,
+            0.5f, -0.5f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f,
+            0.5f, 0.5f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f,
+            -0.5f, 0.5f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+
+            -0.5f, -0.5f, -0.5f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f,
+            0.5f, -0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f,
+            0.5f, 0.5f, -0.5f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f,
+            -0.5f, 0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
         };
 
         private short[] indices = new short[]
         {
-            0, 1, 2, 2, 3, 0
+            0, 1, 2, 2, 3, 0,
+            4, 5, 6, 6, 7, 4
         };
 
         private DateTime startTime;
@@ -224,8 +240,9 @@ namespace sampler
             CreateRenderPass();
             CreateDescriptorSetLayout();
             CreateGraphicPipeline();
-            CreateFrameBuffers();
             CreateCommandPool();
+            CreateDepthResources();
+            CreateFrameBuffers();
             CreateTextureImage();
             CreateTextureImageView();
             CreateTextureSampler();
@@ -240,6 +257,10 @@ namespace sampler
 
         public void CleanupSwapChain()
         {
+            device.DestroyImageView(depthImageView);
+            device.DestroyImage(depthImage);
+            device.FreeMemory(depthImageMemory);
+
             foreach (var frameBuffer in swapChainFramebuffers)
             {
                 device.DestroyFramebuffer(frameBuffer);
@@ -272,6 +293,7 @@ namespace sampler
             CreateImageViews();
             CreateRenderPass();
             CreateGraphicPipeline();
+            CreateDepthResources();
             CreateFrameBuffers();
             CreateCommandBuffers();
         }
@@ -431,7 +453,7 @@ namespace sampler
 
         public void CreateRenderPass()
         {
-            AttachmentDescription[] colorAttachment = new AttachmentDescription[]
+            AttachmentDescription[] attachments = new AttachmentDescription[]
             {
                 new AttachmentDescription
                 {
@@ -443,6 +465,18 @@ namespace sampler
                     StencilStoreOp = AttachmentStoreOp.DontCare,
                     InitialLayout = ImageLayout.Undefined,
                     FinalLayout = ImageLayout.PresentSrcKhr
+                },
+
+                new AttachmentDescription
+                {
+                    Format = FindDepthFormat(),
+                    Samples = SampleCountFlags.Count1,
+                    LoadOp = AttachmentLoadOp.Clear,
+                    StoreOp = AttachmentStoreOp.DontCare,
+                    StencilLoadOp = AttachmentLoadOp.DontCare,
+                    StencilStoreOp = AttachmentStoreOp.DontCare,
+                    InitialLayout = ImageLayout.Undefined,
+                    FinalLayout = ImageLayout.DepthStencilAttachmentOptimal
                 }
             };
 
@@ -455,19 +489,40 @@ namespace sampler
                 }
             };
 
+            AttachmentReference depthAttachmentRef = new AttachmentReference
+            {
+                Attachment = 1,
+                Layout = ImageLayout.DepthStencilAttachmentOptimal
+            };
+
             SubpassDescription[] subpasses = new SubpassDescription[]
             {
                 new SubpassDescription
                 {
                     PipelineBindPoint = PipelineBindPoint.Graphics,
-                    ColorAttachments = colorAttachmentRefs
+                    ColorAttachments = colorAttachmentRefs,
+                    DepthStencilAttachment = depthAttachmentRef
+                }
+            };
+
+            SubpassDependency[] dependencies = new SubpassDependency[]
+            {
+                new SubpassDependency
+                {
+                    SrcSubpass = (~0U),
+                    DstSubpass = 0,
+                    SrcStageMask = PipelineStageFlags.ColorAttachmentOutput,
+                    SrcAccessMask = 0,
+                    DstStageMask = PipelineStageFlags.ColorAttachmentOutput,
+                    DstAccessMask = AccessFlags.ColorAttachmentRead | AccessFlags.ColorAttachmentWrite
                 }
             };
 
             var renderPassInfo = new RenderPassCreateInfo
             {
-                Attachments = colorAttachment,
-                Subpasses = subpasses
+                Attachments = attachments,
+                Subpasses = subpasses,
+                Dependencies = dependencies
             };
 
             renderPass = device.CreateRenderPass(renderPassInfo);
@@ -475,7 +530,7 @@ namespace sampler
 
         public void CreateDescriptorSetLayout()
         {
-            DescriptorSetLayoutBinding[] uboLayoutBindings = new DescriptorSetLayoutBinding[]
+            DescriptorSetLayoutBinding[] bindings = new DescriptorSetLayoutBinding[]
             {
                 new DescriptorSetLayoutBinding
                 {
@@ -483,12 +538,20 @@ namespace sampler
                     DescriptorCount = 1,
                     DescriptorType = DescriptorType.UniformBuffer,
                     StageFlags = ShaderStageFlags.Vertex
+                },
+
+                new DescriptorSetLayoutBinding
+                {
+                    Binding = 1,
+                    DescriptorCount = 1,
+                    DescriptorType = DescriptorType.CombinedImageSampler,
+                    StageFlags = ShaderStageFlags.Fragment
                 }
             };
 
             var layoutInfo = new DescriptorSetLayoutCreateInfo
             {
-                Bindings = uboLayoutBindings
+                Bindings = bindings
             };
 
             descriptorSetLayout = device.CreateDescriptorSetLayout(layoutInfo);
@@ -535,10 +598,10 @@ namespace sampler
             {
                 X = 0.0f,
                 Y = 0.0f,
-                Width = (float)swapChainextent.Width,
-                Height = (float)swapChainextent.Height,
+                Width = swapChainextent.Width,
+                Height = swapChainextent.Height,
                 MinDepth = 0.0f,
-                MaxDepth = 0.0f
+                MaxDepth = 1.0f
             };
 
             var scissor = new Rect2D();
@@ -567,6 +630,15 @@ namespace sampler
             {
                 SampleShadingEnable = false,
                 RasterizationSamples = SampleCountFlags.Count1
+            };
+
+            var depthStencil = new PipelineDepthStencilStateCreateInfo
+            {
+                DepthTestEnable = true,
+                DepthWriteEnable = true,
+                DepthCompareOp = CompareOp.Less,
+                DepthBoundsTestEnable = false,
+                StencilTestEnable = false
             };
 
             var colorBlendAttachment = new PipelineColorBlendAttachmentState
@@ -600,6 +672,7 @@ namespace sampler
                     ViewportState = viewportState,
                     RasterizationState = rasterizer,
                     MultisampleState = multisampling,
+                    DepthStencilState = depthStencil,
                     ColorBlendState = colorBlending,
                     Layout = pipelineLayout,
                     RenderPass = renderPass,
@@ -620,7 +693,7 @@ namespace sampler
 
             foreach (var imageView in swapChainImageViews)
             {
-                ImageView[] attachments = { imageView };
+                ImageView[] attachments = { imageView, depthImageView };
 
                 var framebufferInfo = new FramebufferCreateInfo
                 {
@@ -645,6 +718,41 @@ namespace sampler
             };
 
             commandPool = device.CreateCommandPool(poolInfo);
+        }
+
+        public void CreateDepthResources()
+        {
+            var depthFormat = FindDepthFormat();
+
+            (depthImage, depthImageMemory) = CreateImage(swapChainextent.Width, swapChainextent.Height, depthFormat, ImageTiling.Optimal, ImageUsageFlags.DepthStencilAttachment, MemoryPropertyFlags.DeviceLocal);
+            depthImageView = CreateImageView(depthImage, depthFormat);
+
+            TransitionImageLayout(depthImage, depthFormat, ImageLayout.Undefined, ImageLayout.DepthStencilAttachmentOptimal);
+        }
+
+        public Format FindSupportedFormat(Format[] candidates, ImageTiling imageTiling, FormatFeatureFlags formatFeature)
+        {
+            foreach(var format in candidates)
+            {
+                var props = physicalDevice.GetFormatProperties(format);
+
+                if (imageTiling == ImageTiling.Linear && (props.LinearTilingFeatures & formatFeature) == formatFeature)
+                    return format;
+                else if (imageTiling == ImageTiling.Optimal && (props.OptimalTilingFeatures & formatFeature) == formatFeature)
+                    return format;
+            }
+
+            throw new Exception("failed to find support format!");
+        }
+
+        public Format FindDepthFormat()
+        {
+            return FindSupportedFormat(new Format[] { Format.D32Sfloat, Format.D32SfloatS8Uint, Format.D24UnormS8Uint }, ImageTiling.Optimal, FormatFeatureFlags.DepthStencilAttachment);
+        }
+
+        public bool HasStencilComponent(Format format)
+        {
+            return format == Format.D32SfloatS8Uint || format == Format.D24UnormS8Uint;
         }
 
         public void CreateTextureImage()
@@ -758,16 +866,29 @@ namespace sampler
                     OldLayout = oldLayout,
                     NewLayout = newLayout,
                     Image = image,
-                    SubresourceRange = new ImageSubresourceRange
-                    {
-                        AspectMask = ImageAspectFlags.Color,
-                        BaseMipLevel = 0,
-                        LayerCount = 1,
-                        BaseArrayLayer = 0,
-                        LevelCount = 1
-                    }
                 },
             };
+
+            var isr = new ImageSubresourceRange
+            {
+                AspectMask = ImageAspectFlags.Color,
+                BaseMipLevel = 0,
+                LayerCount = 1,
+                BaseArrayLayer = 0,
+                LevelCount = 1
+            };
+            if (newLayout == ImageLayout.DepthStencilAttachmentOptimal)
+            {
+                isr.AspectMask = ImageAspectFlags.Depth;
+                if (HasStencilComponent(format))
+                {
+                    isr.AspectMask |= ImageAspectFlags.Stencil;
+                }
+            } else {
+                isr.AspectMask = ImageAspectFlags.Color;
+            }
+
+            barriers[0].SubresourceRange = isr;
 
             PipelineStageFlags sourceStage;
             PipelineStageFlags destinationStage;
@@ -787,6 +908,13 @@ namespace sampler
 
                 sourceStage = PipelineStageFlags.Transfer;
                 destinationStage = PipelineStageFlags.FragmentShader;
+            } else if (oldLayout == ImageLayout.Undefined && newLayout == ImageLayout.DepthStencilAttachmentOptimal)
+            {
+                barriers[0].SrcAccessMask = 0;
+                barriers[0].DstAccessMask = AccessFlags.DepthStencilAttachmentRead | AccessFlags.DepthStencilAttachmentWrite;
+
+                sourceStage = PipelineStageFlags.TopOfPipe;
+                destinationStage = PipelineStageFlags.EarlyFragmentTests;
             }
             else
             {
@@ -836,7 +964,7 @@ namespace sampler
 
         public void CreateTextureImageView()
         {
-            textureImageView = CreateImageView(textureImage, Format.R8G8B8A8Unorm);
+            textureImageView = CreateImageView(textureImage, Format.B8G8R8A8Unorm);
         }
 
         public void CreateTextureSampler()
@@ -997,6 +1125,12 @@ namespace sampler
                 {
                     Type = DescriptorType.UniformBuffer,
                     DescriptorCount = 1
+                },
+
+                new DescriptorPoolSize
+                {
+                    Type = DescriptorType.CombinedImageSampler,
+                    DescriptorCount = 1
                 }
             };
 
@@ -1030,17 +1164,40 @@ namespace sampler
                 }
             };
 
-            var descriptorWrite = new WriteDescriptorSet
+            DescriptorImageInfo[] imageInfos = new DescriptorImageInfo[]
             {
-                DstSet = descriptorSet,
-                DstBinding = 0,
-                DstArrayElement = 0,
-                DescriptorType = DescriptorType.UniformBuffer,
-                DescriptorCount = 1,
-                BufferInfo = bufferInfo
+                new DescriptorImageInfo
+                {
+                    ImageLayout = ImageLayout.ShaderReadOnlyOptimal,
+                    ImageView = textureImageView,
+                    Sampler = textureSampler
+                }
             };
 
-            device.UpdateDescriptorSet(descriptorWrite, null);
+            WriteDescriptorSet[] descriptorWrites = new WriteDescriptorSet[]
+            {
+                new WriteDescriptorSet
+                {
+                    DstSet = descriptorSet,
+                    DstBinding = 0,
+                    DstArrayElement = 0,
+                    DescriptorType = DescriptorType.UniformBuffer,
+                    DescriptorCount = 1,
+                    BufferInfo = bufferInfo
+                },
+
+                new WriteDescriptorSet
+                {
+                    DstSet = descriptorSet,
+                    DstBinding = 1,
+                    DstArrayElement = 0,
+                    DescriptorType = DescriptorType.CombinedImageSampler,
+                    DescriptorCount = 1,
+                    ImageInfo = imageInfos
+                }
+            };
+
+            device.UpdateDescriptorSets(descriptorWrites, null);
         }
 
         public void CreateCommandBuffers()
@@ -1069,7 +1226,10 @@ namespace sampler
                     RenderPass = renderPass,
                     Framebuffer = swapChainFramebuffers[i],
                     RenderArea = new Rect2D { Offset = new Offset2D { X = 0, Y = 0 }, Extent = swapChainextent },
-                    ClearValues = new ClearValue[] { new ClearValue { Color = new ClearColorValue(new float[] { 0.0f, 0.0f, 0.0f, 1.0f }) } }
+                    ClearValues = new ClearValue[] {
+                        new ClearValue { Color = new ClearColorValue(new float[] { 0.0f, 0.0f, 0.0f, 1.0f }) },
+                        new ClearValue { DepthStencil = new ClearDepthStencilValue { Depth=1.0f, Stencil=0}}
+                    }
                 };
 
                 cmdBuffer.CmdBeginRenderPass(renderPassInfo, SubpassContents.Inline);

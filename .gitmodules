@@ -1,0 +1,3 @@
+[submodule "objLoader"]
+	path = objLoader
+	url = git://github.com/chrisjansson/ObjLoader.git

@@ -10,7 +10,7 @@ using System.Drawing;
 using Vulkan;
 using Vulkan.Windows;
 
-namespace sampler
+namespace texture_mapping
 {
     class QueueFamilyIndices
     {
@@ -42,8 +42,7 @@ namespace sampler
                 new VertexInputBindingDescription
                 {
                     Binding = 0,
-                    //Stride = (2 + 3) * sizeof(float),
-                    Stride = (uint)(Marshal.SizeOf<Vector2>() + Marshal.SizeOf<Vector3>()),
+                    Stride = (uint)(2 * Marshal.SizeOf<Vector2>() + Marshal.SizeOf<Vector3>()),
                     InputRate = VertexInputRate.Vertex
                 }
             };
@@ -66,8 +65,15 @@ namespace sampler
                     Binding = 0,
                     Location = 1,
                     Format = Format.R32G32B32Sfloat,
-                    //Offset = 2 * sizeof(float)
                     Offset = (uint)Marshal.SizeOf<Vector2>()
+                },
+
+                new VertexInputAttributeDescription
+                {
+                    Binding = 0,
+                    Location = 2,
+                    Format = Format.R32G32Sfloat,
+                    Offset = (uint)(Marshal.SizeOf<Vector2>() + Marshal.SizeOf<Vector3>())
                 }
             };
         }
@@ -158,16 +164,16 @@ namespace sampler
         };
 
         private float[] vertices = new float[] {
-            // pos           color
-            -0.5f, -0.5f, 1.0f, 0.0f, 0.0f,
-            0.5f, -0.5f, 0.0f, 1.0f, 0.0f,
-            0.5f, 0.5f, 0.0f, 0.0f, 1.0f,
-            -0.5f, 0.5f, 1.0f, 1.0f, 1.0f
+            // pos           color            texcoord
+            -0.5f, -0.5f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f,
+            0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f,
+            0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f,
+            -0.5f, 0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
         };
 
         private short[] indices = new short[]
         {
-            0, 1, 2, 2, 3, 0
+            0, 1, 2, 2, 3, 0,
         };
 
         private DateTime startTime;
@@ -475,7 +481,7 @@ namespace sampler
 
         public void CreateDescriptorSetLayout()
         {
-            DescriptorSetLayoutBinding[] uboLayoutBindings = new DescriptorSetLayoutBinding[]
+            DescriptorSetLayoutBinding[] bindings = new DescriptorSetLayoutBinding[]
             {
                 new DescriptorSetLayoutBinding
                 {
@@ -483,12 +489,20 @@ namespace sampler
                     DescriptorCount = 1,
                     DescriptorType = DescriptorType.UniformBuffer,
                     StageFlags = ShaderStageFlags.Vertex
+                },
+
+                new DescriptorSetLayoutBinding
+                {
+                    Binding = 1,
+                    DescriptorCount = 1,
+                    DescriptorType = DescriptorType.CombinedImageSampler,
+                    StageFlags = ShaderStageFlags.Fragment
                 }
             };
 
             var layoutInfo = new DescriptorSetLayoutCreateInfo
             {
-                Bindings = uboLayoutBindings
+                Bindings = bindings
             };
 
             descriptorSetLayout = device.CreateDescriptorSetLayout(layoutInfo);
@@ -836,7 +850,7 @@ namespace sampler
 
         public void CreateTextureImageView()
         {
-            textureImageView = CreateImageView(textureImage, Format.R8G8B8A8Unorm);
+            textureImageView = CreateImageView(textureImage, Format.B8G8R8A8Unorm);
         }
 
         public void CreateTextureSampler()
@@ -997,6 +1011,12 @@ namespace sampler
                 {
                     Type = DescriptorType.UniformBuffer,
                     DescriptorCount = 1
+                },
+
+                new DescriptorPoolSize
+                {
+                    Type = DescriptorType.CombinedImageSampler,
+                    DescriptorCount = 1
                 }
             };
 
@@ -1030,17 +1050,40 @@ namespace sampler
                 }
             };
 
-            var descriptorWrite = new WriteDescriptorSet
+            DescriptorImageInfo[] imageInfos = new DescriptorImageInfo[]
             {
-                DstSet = descriptorSet,
-                DstBinding = 0,
-                DstArrayElement = 0,
-                DescriptorType = DescriptorType.UniformBuffer,
-                DescriptorCount = 1,
-                BufferInfo = bufferInfo
+                new DescriptorImageInfo
+                {
+                    ImageLayout = ImageLayout.ShaderReadOnlyOptimal,
+                    ImageView = textureImageView,
+                    Sampler = textureSampler
+                }
             };
 
-            device.UpdateDescriptorSet(descriptorWrite, null);
+            WriteDescriptorSet[] descriptorWrites = new WriteDescriptorSet[]
+            {
+                new WriteDescriptorSet
+                {
+                    DstSet = descriptorSet,
+                    DstBinding = 0,
+                    DstArrayElement = 0,
+                    DescriptorType = DescriptorType.UniformBuffer,
+                    DescriptorCount = 1,
+                    BufferInfo = bufferInfo
+                },
+                
+                new WriteDescriptorSet
+                {
+                    DstSet = descriptorSet,
+                    DstBinding = 1,
+                    DstArrayElement = 0,
+                    DescriptorType = DescriptorType.CombinedImageSampler,
+                    DescriptorCount = 1,
+                    ImageInfo = imageInfos
+                }
+            };
+
+            device.UpdateDescriptorSets(descriptorWrites, null);
         }
 
         public void CreateCommandBuffers()
